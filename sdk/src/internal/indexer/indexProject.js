@@ -294,6 +294,7 @@ async function indexProject({ rootDir, outFile } = {}) {
   const ignoreSet = new Set(DEFAULT_IGNORES);
   const allFiles = await walkFiles(targetRoot, ignoreSet);
   const manifest = getCallableManifest(targetRoot);
+  const packageRunnableMeta = getPackageRunnableMeta(targetRoot);
 
   const entries = [];
   const counts = {
@@ -309,12 +310,32 @@ async function indexProject({ rootDir, outFile } = {}) {
     callable: 0,
   };
 
+  for (const entry of packageRunnableMeta.entries) {
+    entries.push(entry);
+    counts.total += 1;
+    counts.cli_command += 1;
+    if (entry.callable) counts.callable += 1;
+  }
+
   for (const filePath of allFiles) {
     const isPython = /\.py$/.test(filePath);
     const isJavaScript = /\.(js|cjs|mjs|jsx|tsx)$/.test(filePath);
     const relativePath = path.relative(targetRoot, filePath);
+    let source;
+    if (isJavaScript || isPython) {
+      try {
+        source = await fs.promises.readFile(filePath, 'utf8');
+      } catch (err) {
+        continue;
+      }
+    }
 
-    const runnable = detectRunnable({ rootDir: targetRoot, filePath });
+    const runnable = detectRunnable({
+      rootDir: targetRoot,
+      filePath,
+      source,
+      packageBinFiles: packageRunnableMeta.binFiles,
+    });
     if (runnable) {
       entries.push({
         id: hashId(`${relativePath}:cli`),
@@ -328,12 +349,6 @@ async function indexProject({ rootDir, outFile } = {}) {
     }
 
     if (!isJavaScript && !isPython) continue;
-    let source;
-    try {
-      source = await fs.promises.readFile(filePath, 'utf8');
-    } catch (err) {
-      continue;
-    }
 
     const exports = isPython
       ? await detectPythonExports({ filePath, source })
@@ -394,6 +409,90 @@ async function indexProject({ rootDir, outFile } = {}) {
     outputPath,
     index,
   };
+}
+
+function getPackageRunnableMeta(rootDir) {
+  const pkgPath = path.join(rootDir, 'package.json');
+  let pkg;
+  try {
+    pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+  } catch (err) {
+    return { entries: [], binFiles: new Set() };
+  }
+
+  const binFiles = new Set();
+  if (typeof pkg.bin === 'string') {
+    binFiles.add(normalizePackagePath(pkg.bin));
+  } else if (pkg.bin && typeof pkg.bin === 'object') {
+    for (const value of Object.values(pkg.bin)) {
+      if (typeof value === 'string') binFiles.add(normalizePackagePath(value));
+    }
+  }
+
+  const entries = [];
+  if (pkg.scripts && typeof pkg.scripts === 'object') {
+    for (const [scriptName, scriptCommand] of Object.entries(pkg.scripts)) {
+      if (typeof scriptCommand !== 'string') continue;
+      entries.push(createPackageScriptEntry({ rootDir, pkgPath, scriptName, scriptCommand }));
+    }
+  }
+
+  return { entries, binFiles };
+}
+
+function createPackageScriptEntry({ rootDir, pkgPath, scriptName, scriptCommand }) {
+  const command = 'npm';
+  const args = ['--prefix', rootDir, 'run', scriptName];
+  return {
+    id: hashId(`package.json:npm:${scriptName}`),
+    type: 'cli_command',
+    filePath: pkgPath,
+    relativePath: 'package.json',
+    exportName: `npm:${scriptName}`,
+    signature: '[...args]',
+    language: 'package_script',
+    runtime: 'npm_script',
+    callable: true,
+    io: {
+      inputs: [
+        {
+          name: 'args',
+          type: 'array',
+          required: false,
+          description: 'Arguments passed to the npm script after --.',
+          items: { type: 'string' },
+        },
+      ],
+      output: {
+        type: 'process_result',
+        description: 'Exit code, stdout, and stderr from the script process.',
+      },
+    },
+    execution: {
+      kind: 'cli',
+      filePath: pkgPath,
+      command,
+      args,
+      appendArgsSeparator: '--',
+      callCommand: `${command} --prefix ${quoteCommandArg(rootDir)} run ${quoteCommandArg(scriptName)}`,
+      usageCommand: `${command} --prefix ${quoteCommandArg(rootDir)} run ${quoteCommandArg(scriptName)} -- [...args]`,
+      cwd: rootDir,
+      platform: 'cross-platform',
+      runtime: 'npm_script',
+      packageScript: scriptName,
+      scriptCommand,
+    },
+  };
+}
+
+function normalizePackagePath(value) {
+  return path.normalize(String(value || '').replace(/^\.\//, ''));
+}
+
+function quoteCommandArg(value) {
+  const raw = String(value || '');
+  if (/^[A-Za-z0-9_./:@%+=,-]+$/.test(raw)) return raw;
+  return `"${raw.replace(/(["\\$`])/g, '\\$1')}"`;
 }
 
 module.exports = { indexProject };

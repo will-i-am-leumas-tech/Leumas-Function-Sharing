@@ -82,9 +82,11 @@ async function runPythonRunnerMode(entry, args, timeoutMs) {
 async function runCliMode(entry, args, timeoutMs) {
   const execution = entry.execution || {};
   const command = execution.command || execution.filePath;
+  const runtimeArgs = Array.isArray(args) ? args.map((arg) => String(arg)) : [];
   const commandArgs = [
     ...(Array.isArray(execution.args) ? execution.args : []),
-    ...(Array.isArray(args) ? args.map((arg) => String(arg)) : []),
+    ...(execution.appendArgsSeparator && runtimeArgs.length ? [execution.appendArgsSeparator] : []),
+    ...runtimeArgs,
   ];
 
   return spawnProcess(command, commandArgs, timeoutMs, {

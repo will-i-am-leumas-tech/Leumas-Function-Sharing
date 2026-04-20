@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { indexProject } = require('./internal/indexer/indexProject');
+const { remoteIndexGitRepo, bulkRemoteIndexGitRepos } = require('./internal/indexer/remoteIndexGitRepos');
 const { findAllIndexes } = require('./internal/discovery');
 const { runMeshEntry } = require('./internal/exec/runMeshEntry');
 const { runNodeFunction } = require('./internal/exec/runNodeFunction');
@@ -18,6 +19,97 @@ async function createIndex(targetPath, options = {}) {
 async function findAllIndex(targetPath) {
   const indexes = await findAllIndexes(targetPath);
   return indexes.map((idx) => normalizeIndexPayload(idx));
+}
+
+async function bulkCreateIndexes(paths, options = {}) {
+  if (!Array.isArray(paths)) {
+    throw new Error('`paths` must be an array of project directories.');
+  }
+
+  const concurrency = normalizeConcurrency(options.concurrency);
+  const continueOnError = options.continueOnError !== false;
+  const startedAt = new Date().toISOString();
+  const results = await mapConcurrent(paths, concurrency, async (inputPath) => {
+    const started = Date.now();
+    const resolvedPath = path.resolve(String(inputPath));
+    try {
+      await assertDirectory(resolvedPath);
+      const created = await createIndex(resolvedPath);
+      const entries = Array.isArray(created.index.entries) ? created.index.entries : [];
+      return {
+        ok: true,
+        path: resolvedPath,
+        indexPath: created.path,
+        project: created.index.project || null,
+        summary: created.index.summary || null,
+        entries: entries.length,
+        callable: entries.filter((entry) => entry.callable).length,
+        durationMs: Date.now() - started,
+      };
+    } catch (err) {
+      const result = {
+        ok: false,
+        path: resolvedPath,
+        indexPath: path.join(resolvedPath, '.leumas', 'functionIndex.json'),
+        error: err && err.message ? err.message : String(err),
+        durationMs: Date.now() - started,
+      };
+      if (!continueOnError) throw Object.assign(err, { result });
+      return result;
+    }
+  });
+
+  const totals = results.reduce((acc, result) => {
+    acc.projects += 1;
+    if (result.ok) acc.ok += 1;
+    else acc.failed += 1;
+    acc.entries += result.entries || 0;
+    acc.callable += result.callable || 0;
+    return acc;
+  }, {
+    projects: 0,
+    ok: 0,
+    failed: 0,
+    entries: 0,
+    callable: 0,
+  });
+
+  return {
+    startedAt,
+    finishedAt: new Date().toISOString(),
+    concurrency,
+    totals,
+    results,
+  };
+}
+
+async function remoteCreateIndex(gitUrl, options = {}) {
+  return remoteIndexGitRepo(gitUrl, {
+    outputDir: options.outputDir,
+    cloneRoot: options.cloneRoot,
+    keepClone: options.keepClone,
+    ref: options.ref,
+    cloneTimeoutMs: options.cloneTimeoutMs,
+  });
+}
+
+async function bulkRemoteCreateIndexes(gitUrls, options = {}) {
+  return bulkRemoteIndexGitRepos(gitUrls, {
+    outputDir: options.outputDir,
+    cloneRoot: options.cloneRoot,
+    keepClone: options.keepClone,
+    ref: options.ref,
+    cloneTimeoutMs: options.cloneTimeoutMs,
+    concurrency: options.concurrency,
+    continueOnError: options.continueOnError,
+  });
+}
+
+async function assertDirectory(dirPath) {
+  const stat = await fs.promises.stat(dirPath);
+  if (!stat.isDirectory()) {
+    throw new Error(`Not a directory: ${dirPath}`);
+  }
 }
 
 async function callFunctionInIndex(options = {}) {
@@ -317,6 +409,9 @@ function deriveTotalsFromEntries(entries) {
 
 module.exports = {
   createIndex,
+  bulkCreateIndexes,
+  remoteCreateIndex,
+  bulkRemoteCreateIndexes,
   findAllIndex,
   callFunctionInIndex,
   runMeshEntry,

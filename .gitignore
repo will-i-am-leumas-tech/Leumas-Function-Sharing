@@ -13,6 +13,9 @@ npm-debug.log*
 /demo-node-a/
 /demo-node-b/
 /demo-react-app/
+/demo-python-cli/
+/demo-python-data-app/
+/demo-python-package/
 
 # Coverage
 coverage/

@@ -19,6 +19,9 @@ npm install ./sdk
 ```js
 const {
   createIndex,
+  bulkCreateIndexes,
+  remoteCreateIndex,
+  bulkRemoteCreateIndexes,
   findAllIndex,
   callFunctionInIndex,
   indexStats,
@@ -43,6 +46,49 @@ const created = await createIndex('/apps/a');
 const add = created.index.entries.find((e) => e.exportName === 'add');
 console.log(add.io);
 ```
+
+### `bulkCreateIndexes(paths, options?)`
+
+Creates indexes for many project directories with bounded concurrency.
+
+```js
+const result = await bulkCreateIndexes(
+  ['/apps/a', '/apps/b', '/apps/c'],
+  { concurrency: 4 }
+);
+
+console.log(result.totals);
+```
+
+Each result includes `{ ok, path, indexPath, project, summary, entries, callable }` on success, or `{ ok: false, path, error }` on failure.
+
+### `remoteCreateIndex(gitUrl, options?)`
+
+Shallow-clones a Git repository, indexes it, and writes output outside the clone.
+
+```js
+const result = await remoteCreateIndex(
+  'https://github.com/acme/app.git',
+  { outputDir: './mesh-indexes' }
+);
+
+console.log(result.indexPath);
+```
+
+### `bulkRemoteCreateIndexes(gitUrls, options?)`
+
+Indexes many Git repositories with bounded concurrency.
+
+```js
+const result = await bulkRemoteCreateIndexes(
+  ['https://github.com/acme/app-a.git', 'https://github.com/acme/app-b.git'],
+  { outputDir: './mesh-indexes', concurrency: 2 }
+);
+
+console.log(result.totals);
+```
+
+Remote indexes are written to `<outputDir>/<repo-slug>-<hash>/.leumas/functionIndex.json` with the usual sidecar files.
 
 ### `findAllIndex(path)`
 

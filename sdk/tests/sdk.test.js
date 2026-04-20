@@ -7,6 +7,9 @@ const { spawnSync } = require('node:child_process');
 
 const {
   createIndex,
+  bulkCreateIndexes,
+  remoteCreateIndex,
+  bulkRemoteCreateIndexes,
   findAllIndex,
   callFunctionInIndex,
   indexStats,
@@ -23,6 +26,30 @@ function hasPython() {
     const result = spawnSync(command, ['--version'], { stdio: 'ignore' });
     return result.status === 0;
   });
+}
+
+function hasGit() {
+  return spawnSync('git', ['--version'], { stdio: 'ignore' }).status === 0;
+}
+
+function git(args, cwd) {
+  const result = spawnSync('git', args, {
+    cwd,
+    encoding: 'utf8',
+  });
+  if (result.status !== 0) {
+    throw new Error(result.stderr || result.stdout || `git ${args.join(' ')} failed`);
+  }
+}
+
+function createGitRepo(rootDir, name, filePath, content) {
+  const repoDir = path.join(rootDir, name);
+  fs.mkdirSync(repoDir, { recursive: true });
+  git(['init'], repoDir);
+  writeFile(path.join(repoDir, filePath), content);
+  git(['add', '.'], repoDir);
+  git(['-c', 'user.email=mesh@example.test', '-c', 'user.name=Mesh Test', 'commit', '-m', 'init'], repoDir);
+  return repoDir;
 }
 
 test('createIndex writes index and returns entries', async () => {
@@ -54,6 +81,76 @@ test('findAllIndex discovers indexes under a root', async () => {
 
   const indexes = await findAllIndex(rootDir);
   assert.equal(indexes.length, 2);
+});
+
+test('bulkCreateIndexes creates indexes for many project directories', async () => {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mesh-sdk-bulk-create-'));
+  const appA = path.join(rootDir, 'app-a');
+  const appB = path.join(rootDir, 'app-b');
+
+  writeFile(path.join(appA, 'src', 'a.mjs'), '// @mesh callable\nexport function one() { return 1; }\n');
+  writeFile(path.join(appB, 'scripts', 'echo.js'), 'console.log(process.argv[2] || "");\n');
+
+  const result = await bulkCreateIndexes([appA, appB], { concurrency: 2 });
+  const byPath = new Map(result.results.map((item) => [item.path, item]));
+
+  assert.equal(result.concurrency, 2);
+  assert.equal(result.totals.projects, 2);
+  assert.equal(result.totals.ok, 2);
+  assert.equal(result.totals.failed, 0);
+  assert.equal(fs.existsSync(path.join(appA, '.leumas', 'functionIndex.json')), true);
+  assert.equal(fs.existsSync(path.join(appB, '.leumas', 'cli.json')), true);
+  assert.equal(byPath.get(path.resolve(appA)).ok, true);
+  assert.equal(byPath.get(path.resolve(appB)).ok, true);
+});
+
+test('bulkCreateIndexes reports per-project failures by default', async () => {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mesh-sdk-bulk-fail-'));
+  const appA = path.join(rootDir, 'app-a');
+  const missing = path.join(rootDir, 'missing');
+
+  writeFile(path.join(appA, 'src', 'a.mjs'), '// @mesh callable\nexport function one() { return 1; }\n');
+
+  const result = await bulkCreateIndexes([appA, missing], { concurrency: 2 });
+
+  assert.equal(result.totals.projects, 2);
+  assert.equal(result.totals.ok, 1);
+  assert.equal(result.totals.failed, 1);
+  assert.equal(result.results.find((item) => item.path === path.resolve(missing)).ok, false);
+});
+
+test('remoteCreateIndex clones and indexes a git repository', { skip: !hasGit() }, async () => {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mesh-sdk-remote-'));
+  const repoDir = createGitRepo(
+    rootDir,
+    'remote-app',
+    path.join('src', 'math.mjs'),
+    '// @mesh callable\nexport function add(a, b) { return a + b; }\n'
+  );
+  const outputDir = path.join(rootDir, 'indexes');
+
+  const result = await remoteCreateIndex(repoDir, { outputDir });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.entries, 1);
+  assert.equal(result.callable, 1);
+  assert.ok(result.indexPath.startsWith(outputDir));
+  assert.equal(fs.existsSync(result.indexPath), true);
+});
+
+test('bulkRemoteCreateIndexes indexes many git repositories', { skip: !hasGit() }, async () => {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mesh-sdk-remote-bulk-'));
+  const repoA = createGitRepo(rootDir, 'remote-a', path.join('src', 'a.mjs'), '// @mesh callable\nexport function one() { return 1; }\n');
+  const repoB = createGitRepo(rootDir, 'remote-b', path.join('scripts', 'echo.js'), 'console.log(process.argv[2] || "");\n');
+  const outputDir = path.join(rootDir, 'indexes');
+
+  const result = await bulkRemoteCreateIndexes([repoA, repoB], { outputDir, concurrency: 2 });
+
+  assert.equal(result.totals.repositories, 2);
+  assert.equal(result.totals.ok, 2);
+  assert.equal(result.totals.failed, 0);
+  assert.ok(result.totals.entries >= 2);
+  assert.equal(result.results.every((item) => fs.existsSync(item.indexPath)), true);
 });
 
 test('callFunctionInIndex executes callable export', async () => {
