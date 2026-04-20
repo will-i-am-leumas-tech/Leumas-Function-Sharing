@@ -1,0 +1,65 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Leumas Function Mesh icon</title>
+  <desc id="desc">A compact icon showing a repository feeding a connected function mesh and command runner.</desc>
+  <defs>
+    <linearGradient id="bg" x1="54" y1="38" x2="456" y2="470" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#07111F"/>
+      <stop offset="0.54" stop-color="#0B1728"/>
+      <stop offset="1" stop-color="#102013"/>
+    </linearGradient>
+    <linearGradient id="mesh" x1="154" y1="112" x2="360" y2="398" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#40E0FF"/>
+      <stop offset="0.55" stop-color="#33F0A4"/>
+      <stop offset="1" stop-color="#FFB84D"/>
+    </linearGradient>
+    <filter id="softGlow" x="-35%" y="-35%" width="170%" height="170%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="9" result="blur"/>
+      <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0.15 0 0 0 0 0.92 0 0 0 0 0.78 0 0 0 0.6 0"/>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <style>
+      .mono { font: 800 30px "SFMono-Regular", Consolas, monospace; letter-spacing: 0; fill: #C9F2E2; }
+      .mini { font: 800 24px Arial, Helvetica, sans-serif; letter-spacing: 0; fill: #C8F8FF; }
+      .core { fill: #08111E; }
+    </style>
+  </defs>
+
+  <rect x="26" y="26" width="460" height="460" rx="72" fill="url(#bg)"/>
+  <rect x="27.5" y="27.5" width="457" height="457" rx="70.5" stroke="#263A55" stroke-width="3"/>
+
+  <g opacity="0.26">
+    <path d="M72 114H210M72 172H164M72 330H186M300 100H438M336 158H438M312 348H438M286 406H438" stroke="#3C5572" stroke-width="3"/>
+  </g>
+
+  <g transform="translate(70 76)">
+    <rect x="0" y="0" width="120" height="90" rx="14" fill="#0D1A2A" stroke="#2D8FFF" stroke-width="4"/>
+    <path d="M18 34H50L64 20H104" stroke="#57C7FF" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="26" y="70" class="mini">repo</text>
+  </g>
+
+  <g transform="translate(312 334)">
+    <rect x="0" y="0" width="128" height="82" rx="14" fill="#0D1A2A" stroke="#33F0A4" stroke-width="4"/>
+    <text x="22" y="53" class="mono">&gt; run</text>
+  </g>
+
+  <path d="M176 132C220 142 231 166 240 194" stroke="#40E0FF" stroke-width="6" stroke-linecap="round" stroke-dasharray="15 15"/>
+  <path d="M286 309C313 322 336 344 354 369" stroke="#33F0A4" stroke-width="6" stroke-linecap="round" stroke-dasharray="15 15"/>
+  <path d="M370 342L354 369L324 358" stroke="#33F0A4" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <g filter="url(#softGlow)">
+    <path d="M256 134L346 186V290L256 342L166 290V186L256 134Z" fill="#0A1625" stroke="url(#mesh)" stroke-width="8"/>
+    <circle cx="256" cy="134" r="14" fill="#40E0FF"/>
+    <circle cx="346" cy="186" r="14" fill="#33F0A4"/>
+    <circle cx="346" cy="290" r="14" fill="#FFB84D"/>
+    <circle cx="256" cy="342" r="14" fill="#33F0A4"/>
+    <circle cx="166" cy="290" r="14" fill="#40E0FF"/>
+    <circle cx="166" cy="186" r="14" fill="#FFB84D"/>
+    <circle cx="256" cy="238" r="26" fill="#F4FBFF"/>
+    <path d="M256 154V214M326 197L282 224M326 279L282 252M256 322V264M186 279L230 252M186 197L230 224" stroke="#8EEBFF" stroke-width="5" stroke-linecap="round"/>
+  </g>
+
+  <text x="212" y="249" class="mono core">&lt;/&gt;</text>
+</svg>

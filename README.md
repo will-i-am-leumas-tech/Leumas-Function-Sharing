@@ -1,5 +1,9 @@
 # Leumas Function Mesh
 
+<p align="center">
+  <img src="assets/leumas-function-mesh-logo.svg" alt="Leumas Function Mesh logo showing repository scanning, function mesh indexing, and CLI execution" width="760">
+</p>
+
 Indexes JavaScript, React, Python, and runnable command files into `.leumas/functionIndex.json`, discovers indexes across roots, and executes explicitly allowed local functions or commands.
 
 ## Quick start
@@ -43,6 +47,19 @@ Run a function (must be marked `@mesh callable`):
 ```bash
 npx leumas-mesh run <entryId> --args "[1,2]"
 ```
+
+Browse and run mesh entries interactively:
+
+```bash
+npx leumas-mesh-cli /path/to/projects
+npx leumas-mesh-cli
+node cli.js --roots "/path/to/app-a:/path/to/app-b"
+node cli.js --cwd
+node cli.js --list --json /path/to/projects
+node cli.js --entry <entryId> --args "[1,2]"
+```
+
+The interactive runner scans for `.leumas/functionIndex.json`, shows callable entries with arrow-key navigation, prompts for function args or CLI parameters from `io.inputs` / `execution.parameters`, and runs the selected entry. Without an explicit root it scans the current drive root, such as `/mnt/d` in WSL or `D:\` on Windows. Use `--cwd` to scan only the current working directory.
 
 ## Supported entries
 

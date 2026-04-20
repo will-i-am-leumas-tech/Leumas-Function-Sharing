@@ -22,4 +22,6 @@ async function main() {
   }
 }
 
-main();
+main().catch((err) => {
+  process.stdout.write(JSON.stringify({ ok: false, error: err.message || String(err) }));
+});

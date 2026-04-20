@@ -1,9 +1,10 @@
 const path = require('path');
 const { pathToFileURL } = require('url');
 const { spawn } = require('child_process');
+const { normalizeEntryForRuntime } = require('../shared/runtimePaths');
 
 async function runMeshEntry({ entryId, entry, registry, args = [], mode = 'runner', timeoutMs = 5000 } = {}) {
-  const targetEntry = entry || resolveEntry({ entryId, registry });
+  const targetEntry = normalizeEntryForRuntime(entry || resolveEntry({ entryId, registry }));
   if (!targetEntry) {
     throw new Error('Entry not found');
   }

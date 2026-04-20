@@ -5,7 +5,8 @@
   "type": "commonjs",
   "main": "src/index.js",
   "bin": {
-    "leumas-mesh": "bin/leumas-mesh.js"
+    "leumas-mesh": "bin/leumas-mesh.js",
+    "leumas-mesh-cli": "cli.js"
   },
   "scripts": {
     "test": "node --test"
