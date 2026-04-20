@@ -1,0 +1,21 @@
+{
+  "name": "leumas-function-mesh-sdk",
+  "version": "0.1.0",
+  "description": "JavaScript SDK for creating, reading, and executing Leumas function indexes",
+  "type": "commonjs",
+  "main": "dist/index.js",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "node scripts/build.js",
+    "test": "node --test ./tests/*.test.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "acorn": "^8.12.1",
+    "acorn-jsx": "^5.3.2"
+  }
+}

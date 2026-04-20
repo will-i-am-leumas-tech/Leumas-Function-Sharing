@@ -1,0 +1,27 @@
+{
+  "name": "leumas-function-mesh",
+  "version": "0.1.5",
+  "description": "Local function/component indexing and discovery mesh",
+  "type": "commonjs",
+  "main": "src/index.js",
+  "bin": {
+    "leumas-mesh": "bin/leumas-mesh.js"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "acorn": "^8.12.1",
+    "acorn-jsx": "^5.3.2",
+    "acorn-walk": "^8.3.2"
+  },
+  "devDependencies": {
+    "react": "^18.2.0"
+  },
+  "peerDependencies": {
+    "react": ">=17"
+  }
+}

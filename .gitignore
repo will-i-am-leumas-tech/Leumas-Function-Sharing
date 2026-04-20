@@ -1,0 +1,18 @@
+node_modules/
+.DS_Store
+npm-debug.log*
+
+# Local mesh artifacts
+.leumas/
+
+# Test + template folders excluded for npm packaging
+/tests/
+/templates/
+
+# Demo apps
+/demo-node-a/
+/demo-node-b/
+/demo-react-app/
+
+# Coverage
+coverage/
