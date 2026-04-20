@@ -14,6 +14,9 @@ async function runMeshEntry({ entryId, entry, registry, args = [], mode = 'runne
   if (targetEntry.execution && targetEntry.execution.kind === 'python_import') {
     return runPythonRunnerMode(targetEntry, args, timeoutMs);
   }
+  if (targetEntry.execution && targetEntry.execution.kind === 'cli') {
+    return runCliMode(targetEntry, args, timeoutMs);
+  }
   if (targetEntry.execution && targetEntry.execution.kind === 'import' && mode === 'import') {
     return runImportMode(targetEntry, args);
   }
@@ -76,10 +79,66 @@ async function runPythonRunnerMode(entry, args, timeoutMs) {
   return { ok: false, error: 'Python executable not found' };
 }
 
+async function runCliMode(entry, args, timeoutMs) {
+  const execution = entry.execution || {};
+  const command = execution.command || execution.filePath;
+  const commandArgs = [
+    ...(Array.isArray(execution.args) ? execution.args : []),
+    ...(Array.isArray(args) ? args.map((arg) => String(arg)) : []),
+  ];
+
+  return spawnProcess(command, commandArgs, timeoutMs, {
+    cwd: execution.cwd,
+  });
+}
+
 function getPythonCandidates() {
   const preferred = process.env.LEUMAS_PYTHON_BIN || process.env.PYTHON;
   const candidates = preferred ? [preferred] : ['python3', 'python'];
   return [...new Set(candidates)];
+}
+
+function spawnProcess(command, args, timeoutMs, options = {}) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      cwd: options.cwd,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    let stdout = '';
+    let stderr = '';
+    let settled = false;
+    const timer = setTimeout(() => {
+      settled = true;
+      child.kill('SIGKILL');
+      resolve({ ok: false, error: 'Timeout exceeded', stdout, stderr });
+    }, timeoutMs);
+
+    child.stdout.on('data', (chunk) => {
+      stdout += chunk.toString('utf8');
+    });
+    child.stderr.on('data', (chunk) => {
+      stderr += chunk.toString('utf8');
+    });
+    child.on('error', (err) => {
+      clearTimeout(timer);
+      if (!settled) reject(err);
+    });
+    child.on('close', (code, signal) => {
+      clearTimeout(timer);
+      if (settled) return;
+      resolve({
+        ok: code === 0,
+        result: {
+          code,
+          signal,
+          stdout,
+          stderr,
+        },
+        ...(code === 0 ? {} : { error: `Process exited with code ${code}` }),
+      });
+    });
+  });
 }
 
 function spawnJsonProcess(command, args, timeoutMs, options = {}) {

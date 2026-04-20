@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { detectExports } = require('./detectExports');
 const { detectPythonExports } = require('./detectPythonExports');
+const { detectRunnable } = require('./detectRunnable');
 const { detectReactType } = require('./detectReact');
 const { writeIndex } = require('./writeIndex');
 const { hashId } = require('../shared/hashId');
@@ -307,6 +308,7 @@ async function indexProject({ rootDir = process.cwd(), outFile } = {}) {
     node_function: 0,
     python_function: 0,
     python_class: 0,
+    cli_command: 0,
     react_component: 0,
     react_hook: 0,
     util: 0,
@@ -316,8 +318,22 @@ async function indexProject({ rootDir = process.cwd(), outFile } = {}) {
   for (const filePath of allFiles) {
     const isPython = /\.py$/.test(filePath);
     const isJavaScript = /\.(js|cjs|mjs|jsx|tsx)$/.test(filePath);
-    if (!isJavaScript && !isPython) continue;
     const relativePath = path.relative(rootDir, filePath);
+
+    const runnable = detectRunnable({ rootDir, filePath });
+    if (runnable) {
+      entries.push({
+        id: hashId(`${relativePath}:cli`),
+        filePath,
+        relativePath,
+        ...runnable,
+      });
+      counts.total += 1;
+      counts.cli_command += 1;
+      if (runnable.callable) counts.callable += 1;
+    }
+
+    if (!isJavaScript && !isPython) continue;
     let source;
     try {
       source = await fs.promises.readFile(filePath, 'utf8');

@@ -1,6 +1,6 @@
 # Leumas Function Mesh
 
-Indexes JavaScript, React, and Python projects into `.leumas/functionIndex.json`, discovers indexes across roots, and executes explicitly allowed local functions.
+Indexes JavaScript, React, Python, and runnable command files into `.leumas/functionIndex.json`, discovers indexes across roots, and executes explicitly allowed local functions or commands.
 
 ## Quick start
 
@@ -15,6 +15,8 @@ npx leumas-mesh index
 ```
 
 This writes `.leumas/functionIndex.json` plus execution-kind sidecar indexes such as `.leumas/import.json`, `.leumas/module.json`, `.leumas/python_import.json`, or `.leumas/cli.json` when those execution kinds exist. `.leumas/executionIndex.json` lists the generated sidecar files.
+
+Runnable entries include an absolute `execution.callCommand`, so they can be launched from outside the project directory. Batch files are indexed with `cmd.exe /d /s /c <absolute-file>`, shell scripts with either their absolute executable path or `/bin/sh <absolute-file>`, and `.exe` files with their absolute path.
 
 Discover indexes:
 
@@ -33,6 +35,7 @@ npx leumas-mesh run <entryId> --args "[1,2]"
 - JavaScript/Node functions from `.js`, `.mjs`, `.cjs`, `.jsx`, and `.tsx`
 - React components and hooks
 - Python functions and classes from `.py`
+- Runnable files such as shell scripts, batch files, PowerShell scripts, `.exe` files, and extensionless executable/shebang files
 - Python projects with `pyproject.toml`, `requirements.txt`, package folders, or plain scripts
 
 ## Callable exports
