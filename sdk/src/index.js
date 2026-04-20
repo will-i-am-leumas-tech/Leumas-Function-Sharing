@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { indexProject } = require('./internal/indexer/indexProject');
 const { findAllIndexes } = require('./internal/discovery');
+const { runMeshEntry } = require('./internal/exec/runMeshEntry');
 const { runNodeFunction } = require('./internal/exec/runNodeFunction');
 
 async function createIndex(targetPath, options = {}) {
@@ -68,6 +69,8 @@ async function indexStats(targetPath) {
     callable: 0,
     byType: {
       node_function: 0,
+      python_function: 0,
+      python_class: 0,
       react_component: 0,
       react_hook: 0,
       util: 0,
@@ -291,6 +294,8 @@ function deriveTotalsFromEntries(entries) {
   const totals = {
     total: 0,
     node_function: 0,
+    python_function: 0,
+    python_class: 0,
     react_component: 0,
     react_hook: 0,
     util: 0,
@@ -312,6 +317,7 @@ module.exports = {
   createIndex,
   findAllIndex,
   callFunctionInIndex,
+  runMeshEntry,
   indexStats,
   bulkIndexStatus,
 };

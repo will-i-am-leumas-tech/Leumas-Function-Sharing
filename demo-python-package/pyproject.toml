@@ -1,0 +1,5 @@
+[project]
+name = "demo-python-package"
+version = "0.1.0"
+description = "Package-style Python project with relative imports and async functions"
+requires-python = ">=3.9"

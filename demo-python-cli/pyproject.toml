@@ -1,0 +1,5 @@
+[project]
+name = "demo-python-cli"
+version = "0.1.0"
+description = "Small CLI-style Python project for Leumas mesh indexing"
+requires-python = ">=3.9"

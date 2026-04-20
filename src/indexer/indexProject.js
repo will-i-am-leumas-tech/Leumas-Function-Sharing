@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { detectExports } = require('./detectExports');
+const { detectPythonExports } = require('./detectPythonExports');
 const { detectReactType } = require('./detectReact');
 const { writeIndex } = require('./writeIndex');
 const { hashId } = require('../shared/hashId');
@@ -12,6 +13,17 @@ const DEFAULT_IGNORES = new Set([
   '.git',
   '.leumas',
   'coverage',
+  'vendor',
+  'venv',
+  '.venv',
+  'env',
+  '.env',
+  '__pycache__',
+  '.pytest_cache',
+  '.mypy_cache',
+  '.ruff_cache',
+  '.tox',
+  'site-packages',
 ]);
 
 async function walkFiles(rootDir, ignoreSet) {
@@ -53,11 +65,49 @@ function getProjectMeta(rootDir) {
       version: pkg.version || '0.0.0',
     };
   } catch (err) {
+    const pyproject = getPyprojectMeta(rootDir);
+    if (pyproject) return pyproject;
     return {
       name: path.basename(rootDir),
       version: '0.0.0',
     };
   }
+}
+
+function getPyprojectMeta(rootDir) {
+  const pyprojectPath = path.join(rootDir, 'pyproject.toml');
+  try {
+    const raw = fs.readFileSync(pyprojectPath, 'utf8');
+    const projectBlock = getTomlBlock(raw, 'project');
+    const poetryBlock = getTomlBlock(raw, 'tool.poetry');
+    const block = projectBlock || poetryBlock || raw;
+    const nameMatch = block.match(/^\s*name\s*=\s*["']([^"']+)["']/m);
+    const versionMatch = block.match(/^\s*version\s*=\s*["']([^"']+)["']/m);
+    return {
+      name: nameMatch ? nameMatch[1] : path.basename(rootDir),
+      version: versionMatch ? versionMatch[1] : '0.0.0',
+    };
+  } catch (err) {
+    return null;
+  }
+}
+
+function getTomlBlock(raw, sectionName) {
+  const lines = String(raw || '').split(/\r?\n/);
+  const out = [];
+  let active = false;
+
+  for (const line of lines) {
+    const sectionMatch = line.match(/^\s*\[([^\]]+)\]\s*$/);
+    if (sectionMatch) {
+      if (active) break;
+      active = sectionMatch[1] === sectionName;
+      continue;
+    }
+    if (active) out.push(line);
+  }
+
+  return out.length ? out.join('\n') : null;
 }
 
 function getCallableManifest(rootDir) {
@@ -85,7 +135,7 @@ function isCallableExport({ source, exportName, fileRelativePath, manifest }) {
   });
 }
 
-function getExecutionForEntry({ entryType, modulePath, exportName }) {
+function getExecutionForEntry({ entryType, modulePath, exportName, rootDir, relativePath }) {
   if (entryType === 'node_function') {
     return {
       kind: 'import',
@@ -100,7 +150,32 @@ function getExecutionForEntry({ entryType, modulePath, exportName }) {
       exportName,
     };
   }
+  if (entryType === 'python_function') {
+    return {
+      kind: 'python_import',
+      modulePath,
+      moduleName: getPythonModuleName(rootDir, modulePath),
+      projectRoot: rootDir,
+      exportName,
+    };
+  }
   return null;
+}
+
+function getPythonModuleName(rootDir, filePath) {
+  const parsed = path.parse(filePath);
+  const parts = parsed.name === '__init__' ? [] : [parsed.name];
+  let dir = parsed.dir;
+
+  while (dir && path.resolve(dir) !== path.resolve(rootDir)) {
+    if (!fs.existsSync(path.join(dir, '__init__.py'))) {
+      break;
+    }
+    parts.unshift(path.basename(dir));
+    dir = path.dirname(dir);
+  }
+
+  return parts.join('.');
 }
 
 function extractDocContracts(source) {
@@ -160,7 +235,7 @@ function parseDocBlock(rawBlock) {
 }
 
 function getInputOutputContract({ exp, entryType, docsByExport }) {
-  const isFunctionLike = entryType === 'node_function' || entryType === 'react_component' || entryType === 'react_hook';
+  const isFunctionLike = entryType === 'node_function' || entryType === 'python_function' || entryType === 'react_component' || entryType === 'react_hook';
   const docs = docsByExport.get(exp.exportName) || { inputs: [], output: null };
   if (!isFunctionLike) {
     const inferredValueOutput = exp.valueContract
@@ -230,6 +305,8 @@ async function indexProject({ rootDir = process.cwd(), outFile } = {}) {
   const counts = {
     total: 0,
     node_function: 0,
+    python_function: 0,
+    python_class: 0,
     react_component: 0,
     react_hook: 0,
     util: 0,
@@ -237,7 +314,9 @@ async function indexProject({ rootDir = process.cwd(), outFile } = {}) {
     callable: 0,
   };
   for (const filePath of allFiles) {
-    if (!/\.(js|cjs|mjs|jsx|tsx)$/.test(filePath)) continue;
+    const isPython = /\.py$/.test(filePath);
+    const isJavaScript = /\.(js|cjs|mjs|jsx|tsx)$/.test(filePath);
+    if (!isJavaScript && !isPython) continue;
     const relativePath = path.relative(rootDir, filePath);
     let source;
     try {
@@ -246,17 +325,22 @@ async function indexProject({ rootDir = process.cwd(), outFile } = {}) {
       continue;
     }
 
-    const exports = detectExports({ filePath, source });
-    const docsByExport = extractDocContracts(source);
+    const exports = isPython
+      ? await detectPythonExports({ filePath, source })
+      : detectExports({ filePath, source });
+    const docsByExport = isPython ? new Map() : extractDocContracts(source);
     for (const exp of exports) {
-      const reactType = detectReactType({ exportName: exp.exportName, filePath, source });
-      const entryType = reactType || (exp.type === 'function' ? 'node_function' : 'util');
-      const runtime = reactType ? 'browser' : 'node';
+      const reactType = isPython ? null : detectReactType({ exportName: exp.exportName, filePath, source });
+      const entryType = isPython
+        ? (exp.type === 'function' ? 'python_function' : (exp.type === 'class' ? 'python_class' : 'util'))
+        : (reactType || (exp.type === 'function' ? 'node_function' : 'util'));
+      const language = isPython ? 'python' : 'javascript';
+      const runtime = isPython ? 'python' : (reactType ? 'browser' : 'node');
       const modulePath = filePath;
       const exportName = exp.exportName;
       const id = hashId(`${relativePath}:${exportName}`);
       const signature = exp.params && exp.params.length ? `(${exp.params.join(', ')})` : '';
-      const callable = entryType === 'node_function'
+      const callable = entryType === 'node_function' || entryType === 'python_function'
         ? isCallableExport({ source, exportName, fileRelativePath: relativePath, manifest })
         : false;
 
@@ -267,10 +351,11 @@ async function indexProject({ rootDir = process.cwd(), outFile } = {}) {
         relativePath,
         exportName,
         signature,
+        language,
         runtime,
         callable,
         io: getInputOutputContract({ exp, entryType, docsByExport }),
-        execution: getExecutionForEntry({ entryType, modulePath, exportName }),
+        execution: getExecutionForEntry({ entryType, modulePath, exportName, rootDir, relativePath }),
       });
 
       counts.total += 1;

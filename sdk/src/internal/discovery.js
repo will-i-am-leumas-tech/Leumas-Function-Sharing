@@ -10,6 +10,14 @@ const DEFAULT_IGNORES = new Set([
   'vendor',
   'venv',
   '.venv',
+  'env',
+  '.env',
+  '__pycache__',
+  '.pytest_cache',
+  '.mypy_cache',
+  '.ruff_cache',
+  '.tox',
+  'site-packages',
 ]);
 
 async function findIndexFiles(rootDir, ignoreSet) {

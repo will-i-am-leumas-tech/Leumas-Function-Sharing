@@ -4,7 +4,7 @@ const path = require('path');
 const { indexProject } = require('../src/indexer/indexProject');
 const { discoverIndexes } = require('../src/discovery/discoverIndexes');
 const { listMeshEntries, readCache } = require('../src/discovery/cache');
-const { runNodeFunction } = require('../src/exec/runNodeFunction');
+const { runMeshEntry } = require('../src/exec/runMeshEntry');
 
 function parseArgs(argv) {
   const args = { _: [] };
@@ -50,7 +50,7 @@ async function main() {
     const cache = readCache();
     const registry = listMeshEntries({ cache });
     const parsedArgs = args.args ? JSON.parse(args.args) : [];
-    const result = await runNodeFunction({ entryId, registry, args: parsedArgs, mode: args.mode || 'runner' });
+    const result = await runMeshEntry({ entryId, registry, args: parsedArgs, mode: args.mode || 'runner' });
     process.stdout.write(JSON.stringify(result, null, 2) + '\n');
     return;
   }

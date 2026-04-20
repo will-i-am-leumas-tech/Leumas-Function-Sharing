@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
+const { spawnSync } = require('node:child_process');
 
 const {
   createIndex,
@@ -15,6 +16,13 @@ const {
 function writeFile(filePath, content) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(filePath, content, 'utf8');
+}
+
+function hasPython() {
+  return ['python3', 'python'].some((command) => {
+    const result = spawnSync(command, ['--version'], { stdio: 'ignore' });
+    return result.status === 0;
+  });
 }
 
 test('createIndex writes index and returns entries', async () => {
@@ -62,6 +70,42 @@ test('callFunctionInIndex executes callable export', async () => {
 
   assert.equal(output.ok, true);
   assert.equal(output.result, 42);
+});
+
+test('callFunctionInIndex executes callable Python export', { skip: !hasPython() }, async () => {
+  const projectDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mesh-sdk-python-call-'));
+  writeFile(
+    path.join(projectDir, 'pyproject.toml'),
+    [
+      '[project]',
+      'name = "sdk-python-demo"',
+      'version = "1.2.0"',
+      '',
+    ].join('\n')
+  );
+  writeFile(
+    path.join(projectDir, 'src', 'ops.py'),
+    [
+      '# @mesh callable',
+      'def add(a: int, b: int) -> int:',
+      '    return a + b',
+      '',
+    ].join('\n')
+  );
+
+  const created = await createIndex(projectDir);
+  const addEntry = created.index.entries.find((entry) => entry.exportName === 'add');
+  const output = await callFunctionInIndex({
+    index: created.index,
+    exportName: 'add',
+    args: [10, 5],
+  });
+
+  assert.equal(created.index.project.name, 'sdk-python-demo');
+  assert.equal(addEntry.type, 'python_function');
+  assert.equal(addEntry.io.inputs[0].type, 'number');
+  assert.equal(output.ok, true);
+  assert.equal(output.result, 15);
 });
 
 test('indexStats returns aggregate totals', async () => {
