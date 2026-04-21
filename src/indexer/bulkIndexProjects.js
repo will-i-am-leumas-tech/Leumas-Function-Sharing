@@ -2,6 +2,22 @@ const path = require('path');
 const os = require('os');
 const fs = require('fs');
 const { indexProject } = require('./indexProject');
+const { normalizeRuntimePath } = require('../shared/runtimePaths');
+
+const DEFAULT_CHILD_DIR_IGNORES = new Set([
+  '.git',
+  '.leumas',
+  'node_modules',
+  'dist',
+  'build',
+  'coverage',
+  'vendor',
+  'venv',
+  '.venv',
+  'env',
+  '.env',
+  '__pycache__',
+]);
 
 async function bulkIndexProjects(paths, options = {}) {
   if (!Array.isArray(paths)) {
@@ -9,7 +25,7 @@ async function bulkIndexProjects(paths, options = {}) {
   }
 
   const resolvedPaths = paths
-    .map((inputPath) => path.resolve(String(inputPath)))
+    .map(resolveInputPath)
     .filter(Boolean);
   const concurrency = normalizeConcurrency(options.concurrency);
   const continueOnError = options.continueOnError !== false;
@@ -67,11 +83,42 @@ async function bulkIndexProjects(paths, options = {}) {
   };
 }
 
+async function bulkIndexChildDirectories(parentDir, options = {}) {
+  const resolvedParent = resolveInputPath(parentDir || process.cwd());
+  await assertDirectory(resolvedParent);
+  const childDirectories = await listChildDirectories(resolvedParent, options);
+  const result = await bulkIndexProjects(childDirectories, options);
+
+  return {
+    ...result,
+    parentPath: resolvedParent,
+    discoveredProjects: childDirectories.length,
+  };
+}
+
+async function listChildDirectories(parentDir, options = {}) {
+  const entries = await fs.promises.readdir(parentDir, { withFileTypes: true });
+  const includeHidden = Boolean(options.includeHidden);
+  const includeIgnored = Boolean(options.includeIgnored);
+
+  return entries
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .filter((name) => includeHidden || !name.startsWith('.'))
+    .filter((name) => includeIgnored || !DEFAULT_CHILD_DIR_IGNORES.has(name))
+    .sort((a, b) => a.localeCompare(b))
+    .map((name) => path.join(parentDir, name));
+}
+
 async function assertDirectory(rootDir) {
   const stat = await fs.promises.stat(rootDir);
   if (!stat.isDirectory()) {
     throw new Error(`Not a directory: ${rootDir}`);
   }
+}
+
+function resolveInputPath(inputPath) {
+  return path.resolve(normalizeRuntimePath(String(inputPath)));
 }
 
 function normalizeConcurrency(value) {
@@ -105,4 +152,8 @@ async function mapConcurrent(items, concurrency, worker) {
   return results;
 }
 
-module.exports = { bulkIndexProjects };
+module.exports = {
+  bulkIndexProjects,
+  bulkIndexChildDirectories,
+  listChildDirectories,
+};

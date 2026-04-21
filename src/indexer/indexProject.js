@@ -4,6 +4,8 @@ const { detectExports } = require('./detectExports');
 const { detectPythonExports } = require('./detectPythonExports');
 const { detectRunnable } = require('./detectRunnable');
 const { detectReactType } = require('./detectReact');
+const { detectExpressRoutes } = require('./detectExpressRoutes');
+const { detectSdkEntrypoints } = require('./detectSdkEntrypoints');
 const { writeIndex } = require('./writeIndex');
 const { hashId } = require('../shared/hashId');
 
@@ -301,7 +303,7 @@ async function indexProject({ rootDir = process.cwd(), outFile } = {}) {
   const ignoreSet = new Set(DEFAULT_IGNORES);
   const allFiles = await walkFiles(rootDir, ignoreSet);
   const manifest = getCallableManifest(rootDir);
-  const packageRunnableMeta = getPackageRunnableMeta(rootDir);
+  const packageRunnableMeta = getPackageRunnableMeta(rootDir, allFiles);
 
   const entries = [];
   const counts = {
@@ -310,8 +312,10 @@ async function indexProject({ rootDir = process.cwd(), outFile } = {}) {
     python_function: 0,
     python_class: 0,
     cli_command: 0,
+    express_route: 0,
     react_component: 0,
     react_hook: 0,
+    sdk_entrypoint: 0,
     util: 0,
     unknown: 0,
     callable: 0,
@@ -322,6 +326,15 @@ async function indexProject({ rootDir = process.cwd(), outFile } = {}) {
     counts.total += 1;
     counts.cli_command += 1;
     if (entry.callable) counts.callable += 1;
+  }
+
+  for (const sdkEntry of detectSdkEntrypoints({ rootDir, allFiles })) {
+    entries.push({
+      id: hashId(`${sdkEntry.relativePath}:sdk_entrypoint`),
+      ...sdkEntry,
+    });
+    counts.total += 1;
+    counts.sdk_entrypoint += 1;
   }
 
   for (const filePath of allFiles) {
@@ -353,6 +366,15 @@ async function indexProject({ rootDir = process.cwd(), outFile } = {}) {
       counts.total += 1;
       counts.cli_command += 1;
       if (runnable.callable) counts.callable += 1;
+    }
+
+    if (isJavaScript) {
+      for (const route of detectExpressRoutes({ filePath, source })) {
+        const routeEntry = createExpressRouteEntry({ rootDir, filePath, relativePath, route });
+        entries.push(routeEntry);
+        counts.total += 1;
+        counts.express_route += 1;
+      }
     }
 
     if (!isJavaScript && !isPython) continue;
@@ -416,43 +438,98 @@ async function indexProject({ rootDir = process.cwd(), outFile } = {}) {
   return index;
 }
 
-function getPackageRunnableMeta(rootDir) {
-  const pkgPath = path.join(rootDir, 'package.json');
-  let pkg;
-  try {
-    pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-  } catch (err) {
-    return { entries: [], binFiles: new Set() };
-  }
+function createExpressRouteEntry({ rootDir, filePath, relativePath, route }) {
+  const exportName = `${route.method} ${route.path}`;
+  return {
+    id: hashId(`${relativePath}:express:${route.method}:${route.path}:${route.handlerName || ''}`),
+    type: 'express_route',
+    filePath,
+    relativePath,
+    exportName,
+    signature: `${route.method} ${route.path}`,
+    language: 'javascript',
+    runtime: 'express',
+    callable: false,
+    io: {
+      inputs: [
+        {
+          name: 'request',
+          type: 'http_request',
+          required: true,
+          description: 'HTTP request matching this Express route.',
+        },
+      ],
+      output: {
+        type: 'http_response',
+        description: 'HTTP response produced by the Express handler.',
+      },
+    },
+    execution: {
+      kind: 'http_route',
+      framework: 'express',
+      method: route.method,
+      path: route.path,
+      handlerName: route.handlerName,
+      middlewareCount: route.middlewareCount,
+      modulePath: filePath,
+      projectRoot: rootDir,
+      routerName: route.routerName,
+    },
+  };
+}
 
+function getPackageRunnableMeta(rootDir, allFiles = []) {
+  const packagePaths = allFiles
+    .filter((filePath) => path.basename(filePath) === 'package.json')
+    .sort((a, b) => path.relative(rootDir, a).localeCompare(path.relative(rootDir, b)));
   const binFiles = new Set();
-  if (typeof pkg.bin === 'string') {
-    binFiles.add(normalizePackagePath(pkg.bin));
-  } else if (pkg.bin && typeof pkg.bin === 'object') {
-    for (const value of Object.values(pkg.bin)) {
-      if (typeof value === 'string') binFiles.add(normalizePackagePath(value));
-    }
-  }
-
   const entries = [];
-  if (pkg.scripts && typeof pkg.scripts === 'object') {
-    for (const [scriptName, scriptCommand] of Object.entries(pkg.scripts)) {
-      if (typeof scriptCommand !== 'string') continue;
-      entries.push(createPackageScriptEntry({ rootDir, pkgPath, scriptName, scriptCommand }));
+
+  for (const pkgPath of packagePaths) {
+    let pkg;
+    try {
+      pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+    } catch (err) {
+      continue;
+    }
+
+    const packageDir = path.dirname(pkgPath);
+    if (typeof pkg.bin === 'string') {
+      binFiles.add(normalizePackagePath(path.relative(rootDir, path.resolve(packageDir, pkg.bin))));
+    } else if (pkg.bin && typeof pkg.bin === 'object') {
+      for (const value of Object.values(pkg.bin)) {
+        if (typeof value === 'string') {
+          binFiles.add(normalizePackagePath(path.relative(rootDir, path.resolve(packageDir, value))));
+        }
+      }
+    }
+
+    if (pkg.scripts && typeof pkg.scripts === 'object') {
+      for (const [scriptName, scriptCommand] of Object.entries(pkg.scripts)) {
+        if (typeof scriptCommand !== 'string') continue;
+        entries.push(createPackageScriptEntry({
+          rootDir,
+          packageDir,
+          pkgPath,
+          scriptName,
+          scriptCommand,
+        }));
+      }
     }
   }
 
   return { entries, binFiles };
 }
 
-function createPackageScriptEntry({ rootDir, pkgPath, scriptName, scriptCommand }) {
+function createPackageScriptEntry({ rootDir, packageDir, pkgPath, scriptName, scriptCommand }) {
   const command = 'npm';
-  const args = ['--prefix', rootDir, 'run', scriptName];
+  const relativePath = path.relative(rootDir, pkgPath);
+  const args = ['--prefix', packageDir, 'run', scriptName];
   return {
-    id: hashId(`package.json:npm:${scriptName}`),
+    id: hashId(`${relativePath}:npm:${scriptName}`),
     type: 'cli_command',
     filePath: pkgPath,
-    relativePath: 'package.json',
+    relativePath,
     exportName: `npm:${scriptName}`,
     signature: '[...args]',
     language: 'package_script',
@@ -479,9 +556,9 @@ function createPackageScriptEntry({ rootDir, pkgPath, scriptName, scriptCommand 
       command,
       args,
       appendArgsSeparator: '--',
-      callCommand: `${command} --prefix ${quoteCommandArg(rootDir)} run ${quoteCommandArg(scriptName)}`,
-      usageCommand: `${command} --prefix ${quoteCommandArg(rootDir)} run ${quoteCommandArg(scriptName)} -- [...args]`,
-      cwd: rootDir,
+      callCommand: `${command} --prefix ${quoteCommandArg(packageDir)} run ${quoteCommandArg(scriptName)}`,
+      usageCommand: `${command} --prefix ${quoteCommandArg(packageDir)} run ${quoteCommandArg(scriptName)} -- [...args]`,
+      cwd: packageDir,
       platform: 'cross-platform',
       runtime: 'npm_script',
       packageScript: scriptName,

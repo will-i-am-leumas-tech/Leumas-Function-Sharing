@@ -15,6 +15,7 @@ npm install /mnt/d/leumas/npm/leumas-function-sharing/sdk
 ```js
 const {
   createIndex,
+  bulkCreateIndexesFromDirectory,
   findAllIndex,
   callFunctionInIndex,
   indexStats,
@@ -38,7 +39,24 @@ console.log(add.io); // { inputs: [...], output: {...} }
 - `io.inputs`: `[{ name, type, required, description }]`
 - `io.output`: `{ type, description }`
 
-## 4. `findAllIndex(path)`
+## 4. `bulkCreateIndexesFromDirectory(parentPath, options?)`
+
+Create a separate `.leumas/functionIndex.json` inside every immediate child directory under a parent folder.
+
+```js
+const result = await bulkCreateIndexesFromDirectory(
+  'D:\\Leumas\\opensource\\leumas-cyber-01\\cyber-tools\\repos',
+  { concurrency: 4 }
+);
+
+console.log(result.parentPath);
+console.log(result.discoveredProjects);
+console.log(result.results.map((item) => item.path));
+```
+
+This indexes children such as `repos\\aircrack-ng`, `repos\\amass`, and `repos\\atomic-red-team` independently. Hidden folders and common generated folders like `node_modules`, `.git`, `.leumas`, `dist`, and `build` are skipped by default. Pass `{ includeHidden: true }` or `{ includeIgnored: true }` when you intentionally want those included.
+
+## 5. `findAllIndex(path)`
 
 Discover all indexes under a shared root:
 
@@ -47,7 +65,7 @@ const indexes = await findAllIndex('/absolute/path/to/projects-root');
 console.log(indexes.map((i) => i.path));
 ```
 
-## 5. `callFunctionInIndex(...props)`
+## 6. `callFunctionInIndex(...props)`
 
 Call a callable function from an index.
 
@@ -82,7 +100,7 @@ const result = await callFunctionInIndex({
 });
 ```
 
-## 6. `indexStats(path)`
+## 7. `indexStats(path)`
 
 Get aggregate stats for one app or many apps:
 
@@ -92,7 +110,7 @@ console.log(stats.totals);
 console.log(stats.projects);
 ```
 
-## 7. `bulkIndexStatus(paths, options?)`
+## 8. `bulkIndexStatus(paths, options?)`
 
 Fast status check for a large list of app paths.
 
@@ -119,6 +137,7 @@ Each result includes:
 ```js
 const {
   createIndex,
+  bulkCreateIndexesFromDirectory,
   findAllIndex,
   callFunctionInIndex,
   indexStats,
@@ -131,8 +150,7 @@ async function main() {
   const root = '/absolute/path/to';
 
   // 1) Each app announces its functions
-  await createIndex(appA);
-  await createIndex(appB);
+  await bulkCreateIndexesFromDirectory(root, { concurrency: 4 });
 
   // 2) Discover all app indexes
   const all = await findAllIndex(root);

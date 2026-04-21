@@ -1,0 +1,589 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Leumas Function Mesh</title>
+  <style>
+    :root {
+      --bg: #07111f;
+      --panel: #0d1828;
+      --panel-2: #111f31;
+      --line: #263a55;
+      --text: #f4fbff;
+      --muted: #9ab0c7;
+      --cyan: #40e0ff;
+      --green: #33f0a4;
+      --amber: #ffb84d;
+      --danger: #ff6b7a;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Arial, Helvetica, sans-serif;
+    }
+
+    button, input, textarea, select {
+      font: inherit;
+    }
+
+    .app {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: minmax(290px, 380px) minmax(0, 1fr);
+    }
+
+    .sidebar {
+      border-right: 1px solid var(--line);
+      background: #0a1422;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .brand {
+      padding: 22px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .brand img {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+
+    .scan {
+      padding: 18px;
+      border-bottom: 1px solid var(--line);
+      display: grid;
+      gap: 10px;
+    }
+
+    .scan-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 72px;
+      gap: 8px;
+    }
+
+    input, textarea, select {
+      width: 100%;
+      color: var(--text);
+      background: #07111f;
+      border: 1px solid #31506e;
+      border-radius: 6px;
+      padding: 10px 12px;
+      outline: none;
+    }
+
+    textarea {
+      min-height: 156px;
+      resize: vertical;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    input:focus, textarea:focus, select:focus {
+      border-color: var(--cyan);
+      box-shadow: 0 0 0 2px rgba(64, 224, 255, 0.15);
+    }
+
+    button {
+      border: 1px solid #3d617f;
+      background: #102238;
+      color: var(--text);
+      border-radius: 6px;
+      min-height: 42px;
+      padding: 0 13px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      border-color: var(--cyan);
+    }
+
+    button.primary {
+      color: #06101b;
+      border-color: var(--green);
+      background: var(--green);
+      font-weight: 700;
+    }
+
+    .toolbar {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 72px;
+      gap: 8px;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .entry-list {
+      overflow: auto;
+      flex: 1;
+      min-height: 0;
+    }
+
+    .entry {
+      width: 100%;
+      display: grid;
+      gap: 5px;
+      text-align: left;
+      padding: 13px 18px;
+      border: 0;
+      border-bottom: 1px solid rgba(38, 58, 85, 0.75);
+      background: transparent;
+      color: var(--text);
+      border-radius: 0;
+    }
+
+    .entry.active {
+      background: #102238;
+      border-left: 4px solid var(--green);
+      padding-left: 14px;
+    }
+
+    .entry-title {
+      font-weight: 700;
+      overflow-wrap: anywhere;
+    }
+
+    .entry-meta {
+      color: var(--muted);
+      font-size: 12px;
+      overflow-wrap: anywhere;
+    }
+
+    main {
+      min-width: 0;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      background: linear-gradient(180deg, #0a1524 0%, #07111f 100%);
+    }
+
+    .topbar {
+      min-height: 74px;
+      padding: 18px 24px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+    }
+
+    .status {
+      color: var(--muted);
+      font-size: 14px;
+      overflow-wrap: anywhere;
+    }
+
+    .workspace {
+      min-height: 0;
+      overflow: auto;
+      padding: 24px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(320px, 460px);
+      gap: 20px;
+      align-items: start;
+    }
+
+    .section {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .section h2 {
+      margin: 0;
+      padding: 16px 18px;
+      font-size: 17px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .section-body {
+      padding: 18px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .chip {
+      border: 1px solid #31506e;
+      color: #c8f8ff;
+      background: #0b1728;
+      border-radius: 999px;
+      padding: 6px 9px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .detail-grid {
+      display: grid;
+      grid-template-columns: 120px minmax(0, 1fr);
+      gap: 9px 14px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .detail-grid strong {
+      color: var(--text);
+      overflow-wrap: anywhere;
+    }
+
+    .field {
+      display: grid;
+      gap: 6px;
+    }
+
+    label {
+      font-weight: 700;
+      color: #dcefff;
+      font-size: 13px;
+    }
+
+    .hint {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    pre {
+      margin: 0;
+      max-height: 430px;
+      overflow: auto;
+      padding: 14px;
+      background: #06101b;
+      border: 1px solid #263a55;
+      border-radius: 6px;
+      color: #d8f7e8;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+
+    .empty {
+      color: var(--muted);
+      padding: 28px;
+      border: 1px dashed #31506e;
+      border-radius: 8px;
+      text-align: center;
+    }
+
+    .danger {
+      color: var(--danger);
+    }
+
+    @media (max-width: 900px) {
+      .app {
+        grid-template-columns: 1fr;
+      }
+
+      .sidebar {
+        min-height: auto;
+        max-height: 54vh;
+      }
+
+      .workspace {
+        grid-template-columns: 1fr;
+        padding: 16px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <img src="/assets/leumas-function-mesh-logo.svg" alt="Leumas Function Mesh">
+      </div>
+      <form class="scan" id="scanForm">
+        <label for="rootInput">Mesh root</label>
+        <div class="scan-row">
+          <input id="rootInput" name="root" placeholder="D:\Leumas\opensource\...\repos">
+          <button type="submit" class="primary" title="Scan">Scan</button>
+        </div>
+        <div class="hint">Leave blank to scan the current drive root.</div>
+      </form>
+      <div class="toolbar">
+        <input id="filterInput" placeholder="Filter functions, scripts, projects">
+        <button id="clearFilter" title="Clear filter">Clear</button>
+      </div>
+      <div class="entry-list" id="entryList"></div>
+    </aside>
+
+    <main>
+      <div class="topbar">
+        <div>
+          <strong>Mesh Runner</strong>
+          <div class="status" id="status">Ready</div>
+        </div>
+        <button id="refreshButton">Refresh</button>
+      </div>
+
+      <div class="workspace">
+        <section class="section">
+          <h2>Selected Entry</h2>
+          <div class="section-body" id="details">
+            <div class="empty">Scan a folder and select a callable entry.</div>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>Run</h2>
+          <div class="section-body">
+            <div class="field">
+              <label for="argsInput">Arguments JSON array</label>
+              <textarea id="argsInput" spellcheck="false" placeholder='["value", 123, true]'></textarea>
+              <div class="hint" id="argsHint">Inputs from the selected entry will appear here.</div>
+            </div>
+            <div class="field">
+              <label for="modeInput">Mode</label>
+              <select id="modeInput">
+                <option value="runner">runner</option>
+                <option value="import">import</option>
+              </select>
+            </div>
+            <button id="runButton" class="primary">Run Selected Entry</button>
+            <pre id="output">No result yet.</pre>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    const state = {
+      root: '',
+      entries: [],
+      filtered: [],
+      selected: null,
+    };
+
+    const rootInput = document.getElementById('rootInput');
+    const scanForm = document.getElementById('scanForm');
+    const filterInput = document.getElementById('filterInput');
+    const clearFilter = document.getElementById('clearFilter');
+    const entryList = document.getElementById('entryList');
+    const statusEl = document.getElementById('status');
+    const details = document.getElementById('details');
+    const argsInput = document.getElementById('argsInput');
+    const argsHint = document.getElementById('argsHint');
+    const modeInput = document.getElementById('modeInput');
+    const runButton = document.getElementById('runButton');
+    const refreshButton = document.getElementById('refreshButton');
+    const output = document.getElementById('output');
+
+    scanForm.addEventListener('submit', (event) => {
+      event.preventDefault();
+      scan();
+    });
+
+    refreshButton.addEventListener('click', () => scan());
+    clearFilter.addEventListener('click', () => {
+      filterInput.value = '';
+      applyFilter();
+    });
+    filterInput.addEventListener('input', applyFilter);
+    runButton.addEventListener('click', runSelected);
+
+    scan();
+
+    async function scan() {
+      setStatus('Scanning mesh indexes...');
+      state.root = rootInput.value.trim();
+      state.selected = null;
+      renderDetails();
+      output.textContent = 'No result yet.';
+
+      try {
+        const params = state.root ? `?root=${encodeURIComponent(state.root)}` : '';
+        const res = await fetch(`/api/entries${params}`);
+        const payload = await res.json();
+        if (!payload.ok) throw new Error(payload.error || 'Scan failed');
+        state.root = payload.root;
+        rootInput.value = payload.root;
+        state.entries = payload.entries || [];
+        applyFilter();
+        setStatus(`${state.entries.length} callable entries from ${payload.indexes} indexes`);
+      } catch (err) {
+        state.entries = [];
+        applyFilter();
+        setStatus(err.message, true);
+      }
+    }
+
+    function applyFilter() {
+      const query = filterInput.value.trim().toLowerCase();
+      state.filtered = query
+        ? state.entries.filter((entry) => entrySearchText(entry).includes(query))
+        : state.entries.slice();
+      renderEntries();
+    }
+
+    function renderEntries() {
+      entryList.innerHTML = '';
+      if (!state.filtered.length) {
+        const empty = document.createElement('div');
+        empty.className = 'empty';
+        empty.textContent = state.entries.length ? 'No entries match the filter.' : 'No callable entries found.';
+        entryList.appendChild(empty);
+        return;
+      }
+
+      for (const entry of state.filtered) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = `entry${state.selected && state.selected.id === entry.id ? ' active' : ''}`;
+        button.innerHTML = `
+          <span class="entry-title">${escapeHtml(entry.exportName || 'callable')}</span>
+          <span class="entry-meta">${escapeHtml(projectName(entry))} | ${escapeHtml(entry.type)} | ${escapeHtml(executionKind(entry))}</span>
+          <span class="entry-meta">${escapeHtml(entry.relativePath || entry.filePath || '')}</span>
+        `;
+        button.addEventListener('click', () => selectEntry(entry));
+        entryList.appendChild(button);
+      }
+    }
+
+    function selectEntry(entry) {
+      state.selected = entry;
+      renderEntries();
+      renderDetails();
+      prepareArgs(entry);
+    }
+
+    function renderDetails() {
+      const entry = state.selected;
+      if (!entry) {
+        details.innerHTML = '<div class="empty">Scan a folder and select a callable entry.</div>';
+        argsInput.value = '';
+        argsHint.textContent = 'Inputs from the selected entry will appear here.';
+        return;
+      }
+
+      const inputs = getInputs(entry);
+      details.innerHTML = `
+        <div class="chips">
+          <span class="chip">${escapeHtml(entry.type)}</span>
+          <span class="chip">${escapeHtml(executionKind(entry))}</span>
+          <span class="chip">${escapeHtml(entry.runtime || entry.language || 'runtime')}</span>
+        </div>
+        <div class="detail-grid">
+          <span>Project</span><strong>${escapeHtml(projectName(entry))}</strong>
+          <span>Export</span><strong>${escapeHtml(entry.exportName || '')}</strong>
+          <span>Path</span><strong>${escapeHtml(entry.relativePath || entry.filePath || '')}</strong>
+          <span>Signature</span><strong>${escapeHtml(entry.signature || '[...]')}</strong>
+          <span>Inputs</span><strong>${escapeHtml(inputs.length ? inputs.map((input) => `${input.name}:${input.type || 'unknown'}`).join(', ') : 'none')}</strong>
+        </div>
+        <pre>${escapeHtml(JSON.stringify(entry, null, 2))}</pre>
+      `;
+    }
+
+    function prepareArgs(entry) {
+      const inputs = getInputs(entry);
+      argsInput.value = JSON.stringify(inputs.map(defaultValueForInput), null, 2);
+      argsHint.textContent = inputs.length
+        ? inputs.map((input) => `${input.name} (${input.type || 'unknown'})`).join(' | ')
+        : 'This entry does not declare inputs. Use [] unless the function expects arguments.';
+    }
+
+    async function runSelected() {
+      if (!state.selected) {
+        setStatus('Select an entry before running.', true);
+        return;
+      }
+
+      let args;
+      try {
+        args = JSON.parse(argsInput.value || '[]');
+        if (!Array.isArray(args)) throw new Error('Arguments must be a JSON array.');
+      } catch (err) {
+        setStatus(err.message, true);
+        return;
+      }
+
+      setStatus(`Running ${state.selected.exportName}...`);
+      output.textContent = 'Running...';
+
+      try {
+        const res = await fetch('/api/run', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            root: state.root,
+            entryId: state.selected.id,
+            args,
+            mode: modeInput.value,
+            timeoutMs: 30000,
+          }),
+        });
+        const payload = await res.json();
+        output.textContent = JSON.stringify(payload, null, 2);
+        setStatus(payload.ok === false ? 'Run finished with an error.' : 'Run finished.');
+      } catch (err) {
+        output.textContent = JSON.stringify({ ok: false, error: err.message }, null, 2);
+        setStatus(err.message, true);
+      }
+    }
+
+    function getInputs(entry) {
+      if (entry.execution && Array.isArray(entry.execution.parameters) && entry.execution.parameters.length) {
+        return entry.execution.parameters;
+      }
+      if (entry.io && Array.isArray(entry.io.inputs)) return entry.io.inputs;
+      return [];
+    }
+
+    function defaultValueForInput(input) {
+      if (input.type === 'number') return 0;
+      if (input.type === 'boolean') return false;
+      if (input.type === 'array') return [];
+      if (input.type === 'object' || input.type === 'json') return {};
+      return '';
+    }
+
+    function entrySearchText(entry) {
+      return [
+        projectName(entry),
+        entry.exportName,
+        entry.type,
+        executionKind(entry),
+        entry.relativePath,
+        entry.filePath,
+      ].filter(Boolean).join(' ').toLowerCase();
+    }
+
+    function projectName(entry) {
+      return entry.__project && entry.__project.name ? entry.__project.name : 'mesh';
+    }
+
+    function executionKind(entry) {
+      return entry.execution && entry.execution.kind ? entry.execution.kind : 'unknown';
+    }
+
+    function setStatus(message, danger) {
+      statusEl.textContent = message;
+      statusEl.className = danger ? 'status danger' : 'status';
+    }
+
+    function escapeHtml(value) {
+      return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+  </script>
+</body>
+</html>

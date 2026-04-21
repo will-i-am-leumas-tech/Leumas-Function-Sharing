@@ -25,6 +25,14 @@ npx leumas-mesh bulk-index /path/to/app-a /path/to/app-b --concurrency 4
 npx leumas-mesh index --roots "/path/to/app-a:/path/to/app-b" --json
 ```
 
+Index every immediate subdirectory under one parent as its own independent project:
+
+```bash
+npx leumas-mesh bulk-index-children "D:\Leumas\opensource\leumas-cyber-01\cyber-tools\repos" --concurrency 4
+```
+
+For example, that indexes `repos\aircrack-ng`, `repos\amass`, `repos\atomic-red-team`, and every other immediate child directory, each with its own `.leumas/functionIndex.json`.
+
 Index remote Git repositories:
 
 ```bash
@@ -34,7 +42,9 @@ npx leumas-mesh remote-index https://github.com/acme/app-a.git https://github.co
 
 This writes `.leumas/functionIndex.json` plus execution-kind sidecar indexes such as `.leumas/import.json`, `.leumas/module.json`, `.leumas/python_import.json`, or `.leumas/cli.json` when those execution kinds exist. `.leumas/executionIndex.json` lists the generated sidecar files.
 
-Runnable entries include an absolute `execution.callCommand`, so they can be launched from outside the project directory. Batch files are indexed with `cmd.exe /d /s /c <absolute-file>`, shell scripts with either their absolute executable path or `/bin/sh <absolute-file>`, JS scripts with `node <absolute-file>`, Python scripts with `python3 <absolute-file>`, package scripts with `npm --prefix <project> run <script>`, and `.exe` files with their absolute path. When common CLI declarations are found, entries also include `execution.parameters` and `execution.usageCommand`.
+Runnable entries include an absolute `execution.callCommand`, so they can be launched from outside the project directory. Batch files are indexed with `cmd.exe /d /s /c <absolute-file>`, shell scripts with either their absolute executable path or `/bin/sh <absolute-file>`, JS scripts with `node <absolute-file>`, Python scripts with `python3 <absolute-file>`, package scripts from every discovered `package.json` with `npm --prefix <package-folder> run <script>`, and `.exe` files with their absolute path. When common CLI declarations are found, entries also include `execution.parameters` and `execution.usageCommand`.
+
+SDK entrypoints such as package `main`, `module`, `exports`, or common `index.js` files are indexed as `sdk_entrypoint` entries with `execution.kind: "module"`. Express routes such as `app.get("/health", handler)`, `router.post(...)`, and `app.route(...).delete(...)` are indexed as `express_route` entries with `execution.kind: "http_route"`.
 
 Discover indexes:
 
@@ -61,6 +71,14 @@ node cli.js --entry <entryId> --args "[1,2]"
 
 The interactive runner scans for `.leumas/functionIndex.json`, shows callable entries with arrow-key navigation, prompts for function args or CLI parameters from `io.inputs` / `execution.parameters`, and runs the selected entry. Without an explicit root it scans the current drive root, such as `/mnt/d` in WSL or `D:\` on Windows. Use `--cwd` to scan only the current working directory.
 
+Run the local web UI:
+
+```bash
+npm run ui
+```
+
+The UI serves `public/index.html` from `server.js`, scans mesh indexes, filters callable entries, and runs selected functions or scripts from the browser against the local API.
+
 ## Supported entries
 
 - JavaScript/Node functions from `.js`, `.mjs`, `.cjs`, `.jsx`, and `.tsx`
@@ -68,7 +86,9 @@ The interactive runner scans for `.leumas/functionIndex.json`, shows callable en
 - Python functions and classes from `.py`
 - Runnable files such as shell scripts, batch files, PowerShell scripts, `.exe` files, and extensionless executable/shebang files
 - Callable JS/Python scripts detected through shebangs, package `bin`, `process.argv`, JS CLI builders, Python `if __name__ == "__main__"`, `argparse`, `click`, `typer`, or `sys.argv`
-- `package.json` scripts as cross-directory `npm --prefix <project> run <script>` commands
+- `package.json` scripts from root or nested package folders as cross-directory `npm --prefix <package-folder> run <script>` commands
+- SDK entrypoints from package `main`, `module`, `exports`, and common `index.js` files
+- Express server routes from `app` or `router` HTTP method calls
 - Python projects with `pyproject.toml`, `requirements.txt`, package folders, or plain scripts
 
 ## Callable exports

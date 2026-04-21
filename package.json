@@ -9,7 +9,8 @@
     "leumas-mesh-cli": "cli.js"
   },
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "ui": "node server.js"
   },
   "engines": {
     "node": ">=20"

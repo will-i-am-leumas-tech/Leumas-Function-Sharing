@@ -8,6 +8,7 @@ const { spawnSync } = require('node:child_process');
 const {
   createIndex,
   bulkCreateIndexes,
+  bulkCreateIndexesFromDirectory,
   remoteCreateIndex,
   bulkRemoteCreateIndexes,
   findAllIndex,
@@ -55,15 +56,45 @@ function createGitRepo(rootDir, name, filePath, content) {
 test('createIndex writes index and returns entries', async () => {
   const projectDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mesh-sdk-create-'));
 
-  writeFile(path.join(projectDir, 'package.json'), JSON.stringify({ name: 'app-one', version: '1.0.0' }, null, 2));
+  writeFile(path.join(projectDir, 'package.json'), JSON.stringify({
+    name: 'app-one',
+    version: '1.0.0',
+    main: './index.js',
+  }, null, 2));
+  writeFile(path.join(projectDir, 'packages', 'api', 'package.json'), JSON.stringify({
+    name: 'api-one',
+    version: '1.0.0',
+    scripts: {
+      start: 'node server.js',
+    },
+  }, null, 2));
+  writeFile(path.join(projectDir, 'index.js'), 'exports.createClient = function createClient() { return {}; };\n');
+  writeFile(
+    path.join(projectDir, 'server.js'),
+    [
+      'const express = require("express");',
+      'const app = express();',
+      'app.get("/health", (req, res) => res.json({ ok: true }));',
+      '',
+    ].join('\n')
+  );
   writeFile(path.join(projectDir, 'src', 'math.mjs'), '// @mesh callable\nexport function add(a, b) { return a + b; }\n');
 
   const result = await createIndex(projectDir);
   const addEntry = result.index.entries.find((entry) => entry.exportName === 'add');
+  const nestedScriptEntry = result.index.entries.find((entry) => entry.exportName === 'npm:start' && entry.relativePath === path.join('packages', 'api', 'package.json'));
+  const sdkEntry = result.index.entries.find((entry) => entry.type === 'sdk_entrypoint' && entry.relativePath === 'index.js');
+  const expressRoute = result.index.entries.find((entry) => entry.type === 'express_route' && entry.exportName === 'GET /health');
 
   assert.ok(fs.existsSync(result.path));
   assert.equal(result.index.project.name, 'app-one');
   assert.ok(addEntry);
+  assert.ok(nestedScriptEntry);
+  assert.ok(sdkEntry);
+  assert.equal(sdkEntry.execution.kind, 'module');
+  assert.ok(expressRoute);
+  assert.equal(expressRoute.execution.kind, 'http_route');
+  assert.equal(nestedScriptEntry.execution.cwd, path.join(projectDir, 'packages', 'api'));
   assert.ok(Array.isArray(addEntry.io.inputs));
   assert.equal(addEntry.io.output.type, 'string | number');
 });
@@ -102,6 +133,32 @@ test('bulkCreateIndexes creates indexes for many project directories', async () 
   assert.equal(fs.existsSync(path.join(appB, '.leumas', 'cli.json')), true);
   assert.equal(byPath.get(path.resolve(appA)).ok, true);
   assert.equal(byPath.get(path.resolve(appB)).ok, true);
+});
+
+test('bulkCreateIndexesFromDirectory creates indexes for immediate child directories', async () => {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mesh-sdk-bulk-children-'));
+  const appA = path.join(rootDir, 'aircrack-ng');
+  const appB = path.join(rootDir, 'amass');
+  const appC = path.join(rootDir, 'atomic-red-team');
+  const ignored = path.join(rootDir, 'node_modules');
+
+  writeFile(path.join(appA, 'src', 'a.mjs'), '// @mesh callable\nexport function one() { return 1; }\n');
+  writeFile(path.join(appB, 'src', 'b.mjs'), '// @mesh callable\nexport function two() { return 2; }\n');
+  writeFile(path.join(appC, 'scripts', 'echo.js'), 'console.log(process.argv[2] || "");\n');
+  writeFile(path.join(ignored, 'src', 'ignored.mjs'), '// @mesh callable\nexport function hidden() { return 0; }\n');
+
+  const result = await bulkCreateIndexesFromDirectory(rootDir, { concurrency: 2 });
+  const paths = result.results.map((item) => item.path).sort();
+
+  assert.equal(result.parentPath, path.resolve(rootDir));
+  assert.equal(result.discoveredProjects, 3);
+  assert.equal(result.totals.projects, 3);
+  assert.equal(result.totals.ok, 3);
+  assert.deepEqual(paths, [appA, appB, appC].map((item) => path.resolve(item)).sort());
+  assert.equal(fs.existsSync(path.join(appA, '.leumas', 'functionIndex.json')), true);
+  assert.equal(fs.existsSync(path.join(appB, '.leumas', 'functionIndex.json')), true);
+  assert.equal(fs.existsSync(path.join(appC, '.leumas', 'functionIndex.json')), true);
+  assert.equal(fs.existsSync(path.join(ignored, '.leumas', 'functionIndex.json')), false);
 });
 
 test('bulkCreateIndexes reports per-project failures by default', async () => {

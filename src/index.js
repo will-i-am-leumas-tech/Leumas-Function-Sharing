@@ -1,5 +1,5 @@
 const { indexProject } = require('./indexer/indexProject');
-const { bulkIndexProjects } = require('./indexer/bulkIndexProjects');
+const { bulkIndexProjects, bulkIndexChildDirectories } = require('./indexer/bulkIndexProjects');
 const { remoteIndexGitRepo, bulkRemoteIndexGitRepos } = require('./indexer/remoteIndexGitRepos');
 const { discoverIndexes } = require('./discovery/discoverIndexes');
 const { listMeshEntries } = require('./discovery/cache');
@@ -11,6 +11,7 @@ const { useMeshRegistry } = require('./react/useMeshRegistry');
 module.exports = {
   indexProject,
   bulkIndexProjects,
+  bulkIndexChildDirectories,
   remoteIndexGitRepo,
   bulkRemoteIndexGitRepos,
   discoverIndexes,

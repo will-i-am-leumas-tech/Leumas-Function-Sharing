@@ -5,6 +5,22 @@ const { remoteIndexGitRepo, bulkRemoteIndexGitRepos } = require('./internal/inde
 const { findAllIndexes } = require('./internal/discovery');
 const { runMeshEntry } = require('./internal/exec/runMeshEntry');
 const { runNodeFunction } = require('./internal/exec/runNodeFunction');
+const { normalizeRuntimePath } = require('./internal/shared/runtimePaths');
+
+const DEFAULT_CHILD_DIR_IGNORES = new Set([
+  '.git',
+  '.leumas',
+  'node_modules',
+  'dist',
+  'build',
+  'coverage',
+  'vendor',
+  'venv',
+  '.venv',
+  'env',
+  '.env',
+  '__pycache__',
+]);
 
 async function createIndex(targetPath, options = {}) {
   const rootDir = path.resolve(targetPath || process.cwd());
@@ -83,6 +99,19 @@ async function bulkCreateIndexes(paths, options = {}) {
   };
 }
 
+async function bulkCreateIndexesFromDirectory(parentDir, options = {}) {
+  const resolvedParent = resolveInputPath(parentDir || process.cwd());
+  await assertDirectory(resolvedParent);
+  const childDirectories = await listChildDirectories(resolvedParent, options);
+  const result = await bulkCreateIndexes(childDirectories, options);
+
+  return {
+    ...result,
+    parentPath: resolvedParent,
+    discoveredProjects: childDirectories.length,
+  };
+}
+
 async function remoteCreateIndex(gitUrl, options = {}) {
   return remoteIndexGitRepo(gitUrl, {
     outputDir: options.outputDir,
@@ -110,6 +139,24 @@ async function assertDirectory(dirPath) {
   if (!stat.isDirectory()) {
     throw new Error(`Not a directory: ${dirPath}`);
   }
+}
+
+async function listChildDirectories(parentDir, options = {}) {
+  const entries = await fs.promises.readdir(parentDir, { withFileTypes: true });
+  const includeHidden = Boolean(options.includeHidden);
+  const includeIgnored = Boolean(options.includeIgnored);
+
+  return entries
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .filter((name) => includeHidden || !name.startsWith('.'))
+    .filter((name) => includeIgnored || !DEFAULT_CHILD_DIR_IGNORES.has(name))
+    .sort((a, b) => a.localeCompare(b))
+    .map((name) => path.join(parentDir, name));
+}
+
+function resolveInputPath(inputPath) {
+  return path.resolve(normalizeRuntimePath(String(inputPath)));
 }
 
 async function callFunctionInIndex(options = {}) {
@@ -164,8 +211,10 @@ async function indexStats(targetPath) {
       python_function: 0,
       python_class: 0,
       cli_command: 0,
+      express_route: 0,
       react_component: 0,
       react_hook: 0,
+      sdk_entrypoint: 0,
       util: 0,
       unknown: 0,
     },
@@ -390,8 +439,10 @@ function deriveTotalsFromEntries(entries) {
     python_function: 0,
     python_class: 0,
     cli_command: 0,
+    express_route: 0,
     react_component: 0,
     react_hook: 0,
+    sdk_entrypoint: 0,
     util: 0,
     unknown: 0,
     callable: 0,
@@ -410,6 +461,7 @@ function deriveTotalsFromEntries(entries) {
 module.exports = {
   createIndex,
   bulkCreateIndexes,
+  bulkCreateIndexesFromDirectory,
   remoteCreateIndex,
   bulkRemoteCreateIndexes,
   findAllIndex,

@@ -2,19 +2,33 @@
 
 const path = require('path');
 const { indexProject } = require('../src/indexer/indexProject');
-const { bulkIndexProjects } = require('../src/indexer/bulkIndexProjects');
+const { bulkIndexProjects, bulkIndexChildDirectories } = require('../src/indexer/bulkIndexProjects');
 const { bulkRemoteIndexGitRepos } = require('../src/indexer/remoteIndexGitRepos');
 const { discoverIndexes } = require('../src/discovery/discoverIndexes');
 const { listMeshEntries, readCache } = require('../src/discovery/cache');
 const { runMeshEntry } = require('../src/exec/runMeshEntry');
+
+const BOOLEAN_OPTIONS = new Set(['json', 'keep-clone', 'include-hidden', 'include-ignored', 'help', 'h']);
+const VALUE_OPTIONS = new Set(['roots', 'urls', 'repos', 'out', 'output', 'clone-root', 'ref', 'concurrency', 'args', 'mode', 'parent', 'dir', 'root']);
 
 function parseArgs(argv) {
   const args = { _: [] };
   let currentKey = null;
   for (const arg of argv) {
     if (arg.startsWith('--')) {
-      currentKey = arg.slice(2);
-      args[currentKey] = true;
+      const eqIndex = arg.indexOf('=');
+      const key = eqIndex === -1 ? arg.slice(2) : arg.slice(2, eqIndex);
+      const value = eqIndex === -1 ? undefined : arg.slice(eqIndex + 1);
+      if (value !== undefined) {
+        args[key] = value;
+        currentKey = null;
+      } else if (BOOLEAN_OPTIONS.has(key)) {
+        args[key] = true;
+        currentKey = null;
+      } else {
+        args[key] = true;
+        currentKey = VALUE_OPTIONS.has(key) ? key : null;
+      }
     } else if (currentKey) {
       args[currentKey] = arg;
       currentKey = null;
@@ -53,6 +67,21 @@ async function main() {
       throw new Error('Missing project directories. Use `leumas-mesh bulk-index <dir...>` or `--roots`.');
     }
     const result = await bulkIndexProjects(roots, { concurrency: args.concurrency });
+    writeBulkIndexResult(result, Boolean(args.json));
+    if (result.totals.failed > 0) process.exitCode = 1;
+    return;
+  }
+
+  if (command === 'bulk-index-children' || command === 'index-children') {
+    const parentDir = args._[1] || args.parent || args.dir || args.root;
+    if (!parentDir) {
+      throw new Error('Missing parent directory. Use `leumas-mesh bulk-index-children <parent-dir>`.');
+    }
+    const result = await bulkIndexChildDirectories(parentDir, {
+      concurrency: args.concurrency,
+      includeHidden: Boolean(args['include-hidden']),
+      includeIgnored: Boolean(args['include-ignored']),
+    });
     writeBulkIndexResult(result, Boolean(args.json));
     if (result.totals.failed > 0) process.exitCode = 1;
     return;
@@ -99,7 +128,7 @@ async function main() {
     return;
   }
 
-  process.stdout.write('Usage: leumas-mesh <index|bulk-index|remote-index|discover|run>\n');
+  process.stdout.write('Usage: leumas-mesh <index|bulk-index|bulk-index-children|remote-index|discover|run>\n');
 }
 
 function parsePathList(raw) {
@@ -124,6 +153,9 @@ function writeBulkIndexResult(result, asJson) {
 
   process.stdout.write(`Indexed ${result.totals.ok}/${result.totals.projects} projects`);
   process.stdout.write(` (${result.totals.entries} entries, ${result.totals.callable} callable)\n`);
+  if (result.parentPath) {
+    process.stdout.write(`Parent: ${result.parentPath}\n`);
+  }
   for (const item of result.results) {
     if (item.ok) {
       const name = item.project && item.project.name ? item.project.name : path.basename(item.path);
